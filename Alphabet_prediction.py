@@ -49,7 +49,7 @@ class Alphabet(object):
                     break
             self.combined.append(new_example)
 
-    def split(self, ratio, n_examples):
+    def split(self, split_ratio, n_examples):
         self.create_list(n_examples)
         split_ratio = int(self.n_examples * split_ratio)
         return np.array(self.combined[:split_ratio]), np.array(self.combined[split_ratio:])
