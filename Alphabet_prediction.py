@@ -56,7 +56,7 @@ class Alphabet(object):
 
 
 # set parameters:
-examples = 100000
+examples = 150000
 ratio = 0.7
 
 # Create datasets
@@ -70,13 +70,4 @@ assert(X_train.shape[0] == y_train.shape[0])
 X_train = sequence.pad_sequences(X_train, 26)
 X_test = sequence.pad_sequences(X_test, 26)
 
-# Define the Model
-model = Sequential()
-model.add(LSTM(32, batch_input_shape=(32, 10, 16), 
-               stateful=True))
-model.add(Dense(16, activation='softmax'))
-
-# Compile Model
-model.compile(optimizer='rmsprop',
-              loss='categorical_crossentropy')
 
