@@ -1,0 +1,4 @@
+## Experimenting with Spark SQL
+
+A couple of Scripts - experimenting with MySQL and Spark SQL.
+
