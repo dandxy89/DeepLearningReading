@@ -22,6 +22,8 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+Keras/Production/model_architecture.json
+Keras/Production/model_weights.h5
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
