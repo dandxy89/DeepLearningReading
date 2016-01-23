@@ -15,11 +15,11 @@
 
     Caution:
         Masking is Theano-only for the time being. Not yet implemented in TF
-        
+
     Results after 2 epochs:
         Validation Accuracy: 0.8485
                        Loss: 0.3442
-        
+
 
 '''
 
@@ -45,6 +45,7 @@ n_exposures = 30
 window_size = 5
 batch_size = 32
 n_epoch = 2
+input_length = 100
 cpu_count = multiprocessing.cpu_count()
 data_locations = {'./Data/test-neg.txt': 'TEST_NEG',
                   './Data/test-pos.txt': 'TEST_POS',
@@ -175,7 +176,8 @@ model = Sequential()  # or Graph or whatever
 model.add(Embedding(output_dim=vocab_dim,
                     input_dim=n_symbols + 1,
                     mask_zero=True,
-                    weights=[embedding_weights]))
+                    weights=[embedding_weights],
+                    input_length=input_length))  # Adding Input Length
 model.add(LSTM(vocab_dim))
 model.add(Dropout(0.3))
 model.add(Dense(1, activation='sigmoid'))
@@ -195,4 +197,3 @@ score, acc = model.evaluate(X_test, y_test,
                             show_accuracy=True)
 print('Test score:', score)
 print('Test accuracy:', acc)
-
