@@ -26,10 +26,7 @@
 
     Evaluate:
 
-	Evaluate...
-	25000/25000 [==============================] - 320s     
-	('Test score:', 0.32195980163097382)
-	('Test accuracy:', 0.86087999999999998)
+	
 		
 
     Results after 2 epochs:
