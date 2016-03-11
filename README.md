@@ -2,7 +2,7 @@
 
 Overview of Projects Attempted:
 
-* *EmbeddingKeras* - A successful attempt to incorporate Word Vectors 
+* *EmbeddingKeras* - A successful attempt to incorporate Word Vectors into a Deep Learning Sentiment Classifier
 * *Spark_Course_EDx* - Outputs from the weekl coursework
 * *Keras* - One of my favourite github projects and what has ignited my interest in Deep Learning
 * *Learning_Python* - Scipts I wrote to learn python with - some useful Terminal Commands too
