@@ -19,7 +19,7 @@ class Attentive_Reader_LSTM(object):
     def __init__(self):
         self.vocab_size = 20000
         self.context_maxlen = 450
-        self.question_maxlen = 50
+        self.question_maxlen = 100
         self.concat_maxlen = self.context_maxlen + self.question_maxlen
         self.embedding_size = 200
 
@@ -208,12 +208,15 @@ class QADataset(object):
 
 class QAIterator(object):
 
-    def __init__(self, path, QA_dataset, batch_n, **kwargs):
+    def __init__(self, path, QA_dataset, batch_n):
         self.path = path
         self.files = [f for f in os.listdir(self.path)
                       if os.path.isfile(os.path.join(self.path, f))]
         self.QA_dataset = QA_dataset
         self.batch_n = batch_n
+        self.context_size = 450
+        self.query_size = 100
+        self.entity_size = 550
 
     def select(self, data):
         if data != []:
@@ -223,7 +226,7 @@ class QAIterator(object):
             del data[-1]
             return elem
         else:
-            return data[0]
+            return data
 
     def selection(self, data, size):
         if data.shape[0] < size:
@@ -235,9 +238,9 @@ class QAIterator(object):
 
     def get_request_iterator(self):
 
-        batch_ctx, batch_q, batch_a = np.zeros((self.batch_n, 450)), \
-            np.zeros((self.batch_n, 50)), \
-            np.zeros((self.batch_n, 550))
+        batch_ctx, batch_q, batch_a = np.zeros((self.batch_n, self.context_size)), \
+            np.zeros((self.batch_n, self.query_size)), \
+            np.zeros((self.batch_n, self.entity_size))
 
         for row_val in np.arange(self.batch_n):
 
@@ -247,11 +250,11 @@ class QAIterator(object):
 
             file_n = self.select(self.files)
 
-            (ctx, q, a, cand) = self.QA_dataset.get_data(request=file_n)
+            (ctx, q, a, _) = self.QA_dataset.get_data(request=file_n)
 
-            batch_ctx[row_val] = self.selection(ctx, 450)
-            batch_q[row_val] = self.selection(ctx, 50)
-            batch_a[row_val][a.item()] = 10
+            batch_ctx[row_val] = self.selection(ctx, self.context_size)
+            batch_q[row_val] = self.selection(ctx, self.query_size)
+            batch_a[row_val][a.item()] = 1
 
         # Ensure the Correct Type
         batch_ctx = batch_ctx.astype(int)
@@ -263,12 +266,13 @@ class QAIterator(object):
 
 
 # Parameters:
-dataset = '/home/dan1/Desktop/Subversion/trunk/NewsAnalytics/Q&A/deepmind-qa'
+dataset = '/home/dan1/Desktop/Subversion/trunk/NewsAna' \
+          'lytics/Q&A/deepmind-qa'
 dataset_name = 'cnn'
 batch_size = 8
 n_entities = 550
 epoch_count = 1
-n_recursions = np.arange(2)
+n_recursions = np.arange(2000)
 vocab_file = '/home/dan1/Desktop/Subversion/trunk/NewsAnalytics' \
              '/Q&A/deepmind-qa/cnn/stats/training/vocab.txt'
 # Where Mini_test is approximately 1100 files
@@ -294,6 +298,7 @@ n_files = len(QAIterator_.files)
 model.compile(optimizer=RMSprop(lr=5e-5),
               loss={'output': 'categorical_crossentropy'})
 
+count = 0
 for recursion in n_recursions:
     # Print Progress
     if recursion % (n_files / batch_size) == 0 and recursion > 0:
@@ -301,6 +306,13 @@ for recursion in n_recursions:
         epoch_count += 1
     # Get a Batch of Data
     (batch_ctx, batch_q, batch_a) = QAIterator_.get_request_iterator()
-    model.train_on_batch(data={'input_context': batch_ctx,
+    # count += batch_ctx.shape[0]
+    hist = model.train_on_batch(data={'input_context': batch_ctx,
                                'input_query': batch_q,
                                'output': batch_a}, accuracy=False)
+
+# model reconstruction from JSON:
+json_string = model.to_json()
+open('CNNQA_architecture.json',
+     'w').write(json_string)
+model.save_weights('CNNQA_weights.h5')
