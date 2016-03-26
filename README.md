@@ -9,3 +9,7 @@ Overview of Projects Attempted:
 * *NLP* - A couple of Scripts I wrote prior to my interview with DataGenic
 * *Spark_SQL* - Experimenting with MySQL and Spark SQL (made when Spark SQL had just been released)
 * *Torch_7_Learning* - Playing around with Lua and Torch (Started Jan 2015)
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/dandxy89/deeplearning_machinelearning/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
