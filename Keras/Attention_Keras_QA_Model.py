@@ -10,6 +10,8 @@ from keras.models import Graph
 from keras.optimizers import RMSprop
 from keras.regularizers import l2
 
+from Attention import LSTMAttentionLayer
+
 logging.basicConfig(format='[%(asctime)s] : [%(levelname)s] : [%(message)s]',
                     level=logging.INFO)
 
@@ -56,7 +58,7 @@ class Attentive_Reader_LSTM(object):
                                inputs=['forward_context',
                                        'backward_context'],
                                merge_mode='sum')
-
+        ####
         # Query/Question
         q_and_a_model.add_input(name='input_query',
                                 input_shape=(self.context_maxlen,),
@@ -81,29 +83,39 @@ class Attentive_Reader_LSTM(object):
                                        'backward_query'],
                                merge_mode='sum')
 
-        # Attention Module                      )
-        q_and_a_model.add_node(Activation('tanh'),
-                               name='attention_tanh',
+        ####
+        # # Attention Module
+
+        # q_and_a_model.add_node(Activation('tanh'),
+        #                        name='attention_tanh',
+        #                        inputs=['merge_context',
+        #                                'merge_query'],
+        #                        merge_mode='sum')
+        # q_and_a_model.add_node(TimeDistributedDense(self.atten_dim),
+        #                        name='attention_time',
+        #                        input='attention_tanh')
+        # q_and_a_model.add_node(Activation('linear'),
+        #                        name='attention_linear',
+        #                        input='attention_time')
+        # q_and_a_model.add_node(TimeDistributedDense(self.layer1_dim),
+        #                        name='attention_time2',
+        #                        input='attention_linear')
+        q_and_a_model.add_node(LSTMAttentionLayer(self.layer1_dim,
+                                                  inner_activation='sigmoid',
+                                                  batch_size=8),
+                               name='attention',
                                inputs=['merge_context',
                                        'merge_query'],
-                               merge_mode='sum')
-        q_and_a_model.add_node(TimeDistributedDense(self.atten_dim),
-                               name='attention_time',
-                               input='attention_tanh')
-        q_and_a_model.add_node(Activation('softmax'),
-                               name='attention_softmax',
-                               input='attention_time')
-        q_and_a_model.add_node(TimeDistributedDense(self.layer1_dim),
-                               name='attention_time2',
-                               input='attention_softmax')
+                               merge_mode='join')
 
+        ####
         # Attended Layer
         q_and_a_model.add_node(Dropout(self.dropout_val),
                                name='attended',
                                inputs=['merge_context',
-                                       'attention_time2'],
+                                       'attention'],
                                merge_mode='mul')
-
+        ####
         # Output Layer
         q_and_a_model.add_node(Dropout(self.dropout_val),
                                name='attention_a',
@@ -123,6 +135,8 @@ class Attentive_Reader_LSTM(object):
                                input='output_dense')
         q_and_a_model.add_output(name='output',
                                  input='output_dense2')
+
+        ####
         # Print Model
         q_and_a_model.summary()
 
@@ -174,8 +188,9 @@ class QADataset(object):
 
         entities = range(self.n_entities)
         while len(cand) > len(entities):
-            logging.warning("Too many entities (%d) for question: %s, using duplicate entity identifiers"
-                            % (len(cand), request))
+            logging.warning(
+                "Too many entities (%d) for question: %s, using duplicate entity identifiers" %
+                (len(cand), request))
             entities = entities + entities
         random.shuffle(entities)
         cand_mapping = {t: k for t, k in zip(cand, entities)}
@@ -238,9 +253,10 @@ class QAIterator(object):
 
     def get_request_iterator(self):
 
-        batch_ctx, batch_q, batch_a = np.zeros((self.batch_n, self.context_size)), \
-            np.zeros((self.batch_n, self.query_size)), \
-            np.zeros((self.batch_n, self.entity_size))
+        batch_ctx, batch_q, batch_a = np.zeros(
+            (self.batch_n, self.context_size)), np.zeros(
+            (self.batch_n, self.query_size)), np.zeros(
+            (self.batch_n, self.entity_size))
 
         for row_val in np.arange(self.batch_n):
 
@@ -266,20 +282,18 @@ class QAIterator(object):
 
 
 # Parameters:
-dataset = '/home/dan1/Desktop/Subversion/trunk/NewsAna' \
-          'lytics/Q&A/deepmind-qa'
+dataset = '/home/dan/Desktop/DeepMind-Teaching-Machines-to-Read-and-Comprehend/deepmind-qa'
 dataset_name = 'cnn'
 batch_size = 8
 n_entities = 550
 epoch_count = 1
 n_recursions = np.arange(2000)
-vocab_file = '/home/dan1/Desktop/Subversion/trunk/NewsAnalytics' \
-             '/Q&A/deepmind-qa/cnn/stats/training/vocab.txt'
+vocab_file = '/home/dan/Desktop/DeepMind-Teaching-Machines-to-Read-and-Comprehend/deepmind-qa/cnn/stats/training/vocab.txt'
 # Where Mini_test is approximately 1100 files
 data_path = os.path.join(dataset,
                          dataset_name,
                          "questions",
-                         "mini_test")
+                         "test")
 
 
 # Add Iterators and Models
@@ -308,8 +322,8 @@ for recursion in n_recursions:
     (batch_ctx, batch_q, batch_a) = QAIterator_.get_request_iterator()
     # count += batch_ctx.shape[0]
     hist = model.train_on_batch(data={'input_context': batch_ctx,
-                               'input_query': batch_q,
-                               'output': batch_a}, accuracy=False)
+                                      'input_query': batch_q,
+                                      'output': batch_a}, accuracy=False)
 
 # model reconstruction from JSON:
 json_string = model.to_json()
