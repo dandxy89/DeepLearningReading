@@ -10,7 +10,6 @@ from keras.models import Graph
 from keras.optimizers import RMSprop
 from keras.regularizers import l2
 
-from Attention import LSTMAttentionLayer
 
 logging.basicConfig(format='[%(asctime)s] : [%(levelname)s] : [%(message)s]',
                     level=logging.INFO)
@@ -20,16 +19,15 @@ class Attentive_Reader_LSTM(object):
 
     def __init__(self):
         self.vocab_size = 20000
-        self.context_maxlen = 450
-        self.question_maxlen = 100
-        self.concat_maxlen = self.context_maxlen + self.question_maxlen
-        self.embedding_size = 200
+        self.context_maxlen = 350
+        self.question_maxlen = 350
+        self.embedding_size = 300
 
         self.layer1_dim = 256
         self.atten_dim = 100
         self.entity_size = 550
         self.dropout_val = 0.1
-        self.l2_regularizer = 0.01
+        self.l2_regularizer = 0.001
 
     def create_graph(self):
 
@@ -37,11 +35,11 @@ class Attentive_Reader_LSTM(object):
 
         # Story/Context
         q_and_a_model.add_input(name='input_context',
-                                input_shape=(self.context_maxlen,),
+                                input_shape=(self.layer1_dim,),
                                 dtype=int)
-        q_and_a_model.add_node(Embedding(self.embedding_size,
-                                         128,
-                                         input_length=self.context_maxlen),
+        q_and_a_model.add_node(Embedding(self.vocab_size,
+                                         self.embedding_size,
+                                         input_length=350),
                                name='embedding_context',
                                input='input_context')
         q_and_a_model.add_node(LSTM(self.layer1_dim,
@@ -53,7 +51,7 @@ class Attentive_Reader_LSTM(object):
                                     return_sequences=True),
                                name='backward_context',
                                input='embedding_context')
-        q_and_a_model.add_node(Dropout(self.dropout_val),
+        q_and_a_model.add_node(Dropout(0.1),
                                name='merge_context',
                                inputs=['forward_context',
                                        'backward_context'],
@@ -61,11 +59,11 @@ class Attentive_Reader_LSTM(object):
         ####
         # Query/Question
         q_and_a_model.add_input(name='input_query',
-                                input_shape=(self.context_maxlen,),
+                                input_shape=(350,),
                                 dtype=int)
-        q_and_a_model.add_node(Embedding(self.embedding_size,
-                                         128,
-                                         input_length=self.context_maxlen),
+        q_and_a_model.add_node(Embedding(self.vocab_size,
+                                         self.embedding_size,
+                                         input_length=350),
                                name='embedding_query',
                                input='input_query')
         q_and_a_model.add_node(LSTM(self.layer1_dim,
@@ -77,7 +75,7 @@ class Attentive_Reader_LSTM(object):
                                     return_sequences=True),
                                name='backward_query',
                                input='embedding_query')
-        q_and_a_model.add_node(Dropout(self.dropout_val),
+        q_and_a_model.add_node(Dropout(0.1),
                                name='merge_query',
                                inputs=['forward_query',
                                        'backward_query'],
@@ -85,35 +83,36 @@ class Attentive_Reader_LSTM(object):
 
         ####
         # # Attention Module
-
-        # q_and_a_model.add_node(Activation('tanh'),
-        #                        name='attention_tanh',
-        #                        inputs=['merge_context',
-        #                                'merge_query'],
-        #                        merge_mode='sum')
-        # q_and_a_model.add_node(TimeDistributedDense(self.atten_dim),
-        #                        name='attention_time',
-        #                        input='attention_tanh')
-        # q_and_a_model.add_node(Activation('linear'),
-        #                        name='attention_linear',
-        #                        input='attention_time')
-        # q_and_a_model.add_node(TimeDistributedDense(self.layer1_dim),
-        #                        name='attention_time2',
-        #                        input='attention_linear')
-        q_and_a_model.add_node(LSTMAttentionLayer(self.layer1_dim,
-                                                  inner_activation='sigmoid',
-                                                  batch_size=8),
-                               name='attention',
+        q_and_a_model.add_node(Activation('tanh'),
+                               name='merge_cq',
                                inputs=['merge_context',
                                        'merge_query'],
-                               merge_mode='join')
+                               merge_mode='sum')
+        # Traditional attention mdoel from Hermann et al. 2015 and Tan et al., 2015
+        # Attention: w*tanh(e0a + e1sa[i])
+        q_and_a_model.add_node(TimeDistributedDense(1,
+                                                    W_regularizer=l2(self.l2_regularizer)),
+                               name='attention0',
+                               input='merge_cq')
+        q_and_a_model.add_node(Flatten(),
+                               name="attention1",
+                               input='attention0')
+        q_and_a_model.add_node(Activation('softmax'),
+                               name='attention2',
+                               input='attention1')
+        q_and_a_model.add_node(RepeatVector(self.layer1_dim),
+                               name='attention3',
+                               input='attention2')
+        q_and_a_model.add_node(Permute((2,1)),
+                               name='attention4',
+                               input='attention3')
 
         ####
         # Attended Layer
         q_and_a_model.add_node(Dropout(self.dropout_val),
                                name='attended',
                                inputs=['merge_context',
-                                       'attention'],
+                                       'attention4'],
                                merge_mode='mul')
         ####
         # Output Layer
@@ -123,11 +122,9 @@ class Attentive_Reader_LSTM(object):
                                        'merge_query'],
                                merge_mode='concat',
                                concat_axis=-1)
-
         q_and_a_model.add_node(TimeDistributedMerge(mode='sum'),
                                name='output_dense',
                                input='attention_a')
-
         q_and_a_model.add_node(Dense(self.entity_size,
                                      activation='softmax',
                                      W_regularizer=l2(self.l2_regularizer)),
