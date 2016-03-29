@@ -167,7 +167,7 @@ index_dict, word_vectors, train, test = create_dictionaries(train=train,
 
 print('Setting up Arrays for Keras Embedding Layer...')
 n_symbols = len(index_dict) + 1  # adding 1 to account for 0th index
-embedding_weights = np.zeros((n_symbols + 1, vocab_dim))
+embedding_weights = np.zeros((n_symbols, vocab_dim))
 for word, index in index_dict.items():
     embedding_weights[index, :] = word_vectors[word]
 
@@ -190,7 +190,7 @@ y_test = np.array(y_test)
 print('Defining a Simple Keras Model...')
 model = Sequential()  # or Graph or whatever
 model.add(Embedding(output_dim=vocab_dim,
-                    input_dim=n_symbols + 1,
+                    input_dim=n_symbols,
                     mask_zero=True,
                     weights=[embedding_weights],
                     input_length=input_length))  # Adding Input Length
