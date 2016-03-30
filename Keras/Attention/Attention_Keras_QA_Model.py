@@ -10,6 +10,8 @@ from keras.models import Graph
 from keras.optimizers import RMSprop
 from keras.regularizers import l2
 
+import h5py
+
 
 logging.basicConfig(format='[%(asctime)s] : [%(levelname)s] : [%(message)s]',
                     level=logging.INFO)
@@ -18,13 +20,12 @@ logging.basicConfig(format='[%(asctime)s] : [%(levelname)s] : [%(message)s]',
 class Attentive_Reader_LSTM(object):
 
     def __init__(self):
-        self.vocab_size = 20000
+        self.vocab_size = 29959
         self.context_maxlen = 350
         self.question_maxlen = 350
-        self.embedding_size = 300
+        self.embedding_size = 100
 
-        self.layer1_dim = 256
-        self.atten_dim = 100
+        self.layer1_dim = 128
         self.entity_size = 550
         self.dropout_val = 0.1
         self.l2_regularizer = 0.001
@@ -33,13 +34,22 @@ class Attentive_Reader_LSTM(object):
 
         q_and_a_model = Graph()
 
+        # Adding Predefined Embedding Matrix
+        h5f = h5py.File('embedding_data.h5', 'r')
+        embedding_array = h5f['dataset_1'][:]
+        h5f.close()
+        # Adding the Zero Index Value
+        embedding_array = np.vstack((np.zeros(shape=(100,)),
+                                     embedding_array))
+
         # Story/Context
         q_and_a_model.add_input(name='input_context',
                                 input_shape=(self.layer1_dim,),
                                 dtype=int)
         q_and_a_model.add_node(Embedding(self.vocab_size,
                                          self.embedding_size,
-                                         input_length=350),
+                                         input_length=350,
+                                         weights=[embedding_array]),
                                name='embedding_context',
                                input='input_context')
         q_and_a_model.add_node(LSTM(self.layer1_dim,
@@ -63,7 +73,8 @@ class Attentive_Reader_LSTM(object):
                                 dtype=int)
         q_and_a_model.add_node(Embedding(self.vocab_size,
                                          self.embedding_size,
-                                         input_length=350),
+                                         input_length=350,
+                                         weights=[embedding_array]),
                                name='embedding_query',
                                input='input_query')
         q_and_a_model.add_node(LSTM(self.layer1_dim,
@@ -90,10 +101,13 @@ class Attentive_Reader_LSTM(object):
                                merge_mode='sum')
         # Traditional attention mdoel from Hermann et al. 2015 and Tan et al., 2015
         # Attention: w*tanh(e0a + e1sa[i])
-        q_and_a_model.add_node(TimeDistributedDense(1,
-                                                    W_regularizer=l2(self.l2_regularizer)),
-                               name='attention0',
-                               input='merge_cq')
+        q_and_a_model.add_node(
+            TimeDistributedDense(
+                output_dim=1,
+                W_regularizer=l2(
+                    self.l2_regularizer)),
+            name='attention0',
+            input='merge_cq')
         q_and_a_model.add_node(Flatten(),
                                name="attention1",
                                input='attention0')
@@ -103,7 +117,7 @@ class Attentive_Reader_LSTM(object):
         q_and_a_model.add_node(RepeatVector(self.layer1_dim),
                                name='attention3',
                                input='attention2')
-        q_and_a_model.add_node(Permute((2,1)),
+        q_and_a_model.add_node(Permute((2, 1)),
                                name='attention4',
                                input='attention3')
 
@@ -152,9 +166,8 @@ class QADataset(object):
                      ['<UNK>', '@placeholder'] + \
             (['<SEP>'] if need_sep_token else [])
         self.n_entities = n_entities
-        self.vocab_size = len(self.vocab)
-        self.reverse_vocab = {w: i for i, w in enumerate(self.vocab)}
-        super(QADataset, self).__init__(**kwargs)
+        self.vocab_size = len(self.vocab) + 1
+        self.reverse_vocab = {w: i + 1 for i, w in enumerate(self.vocab)}
 
     def to_word_id(self, w, cand_mapping):
         if w in cand_mapping:
@@ -226,8 +239,8 @@ class QAIterator(object):
                       if os.path.isfile(os.path.join(self.path, f))]
         self.QA_dataset = QA_dataset
         self.batch_n = batch_n
-        self.context_size = 450
-        self.query_size = 100
+        self.context_size = 350
+        self.query_size = 350
         self.entity_size = 550
 
     def select(self, data):
@@ -284,17 +297,24 @@ dataset_name = 'cnn'
 batch_size = 8
 n_entities = 550
 epoch_count = 1
-n_recursions = np.arange(2000)
+n_recursions = np.arange(47537*10)
 vocab_file = '/home/dan/Desktop/DeepMind-Teaching-Machines-to-Read-and-Comprehend/deepmind-qa/cnn/stats/training/vocab.txt'
 # Where Mini_test is approximately 1100 files
 data_path = os.path.join(dataset,
                          dataset_name,
                          "questions",
-                         "test")
+                         "training")
 
 
 # Add Iterators and Models
-model = Attentive_Reader_LSTM().create_graph()
+if 'CNNQA_architecture.json' in os.listdir(os.getcwd()):
+    logging.info('Loading from Saved Point!')
+    from keras.models import model_from_json
+    model = model_from_json(open('CNNQA_architecture.json').read())
+    model.load_weights('CNNQA_weights.h5')
+else:
+    model = Attentive_Reader_LSTM().create_graph()
+# Iterators
 QA_dataset = QADataset(data_path=data_path,
                        vocab_file=vocab_file,
                        n_entities=n_entities,
@@ -306,24 +326,27 @@ n_files = len(QAIterator_.files)
 
 
 # Compile Model
-model.compile(optimizer=RMSprop(lr=5e-5),
+model.compile(optimizer=RMSprop(lr=8e-5),
               loss={'output': 'categorical_crossentropy'})
 
 count = 0
 for recursion in n_recursions:
-    # Print Progress
+    logging.info('Processing Batch: {}'.format(int(recursion)))
+
+    # Print Progress & Save
     if recursion % (n_files / batch_size) == 0 and recursion > 0:
         logging.info('Epochs Complete: {}'.format(epoch_count))
+        # model reconstruction from JSON:
+        json_string = model.to_json()
+        open('CNNQA_architecture.json',
+             'w').write(json_string)
+        model.save_weights('CNNQA_weights.h5')
         epoch_count += 1
+
     # Get a Batch of Data
     (batch_ctx, batch_q, batch_a) = QAIterator_.get_request_iterator()
     # count += batch_ctx.shape[0]
-    hist = model.train_on_batch(data={'input_context': batch_ctx,
-                                      'input_query': batch_q,
-                                      'output': batch_a}, accuracy=False)
-
-# model reconstruction from JSON:
-json_string = model.to_json()
-open('CNNQA_architecture.json',
-     'w').write(json_string)
-model.save_weights('CNNQA_weights.h5')
+    model.train_on_batch(data={'input_context': batch_ctx,
+                               'input_query': batch_q,
+                               'output': batch_a},
+                         accuracy=True)
