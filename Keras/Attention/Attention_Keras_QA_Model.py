@@ -3,15 +3,13 @@ import os
 import random
 from random import randint
 
+import h5py
 from keras.layers.core import *
 from keras.layers.embeddings import Embedding
 from keras.layers.recurrent import LSTM
 from keras.models import Graph
 from keras.optimizers import RMSprop
 from keras.regularizers import l2
-
-import h5py
-
 
 logging.basicConfig(format='[%(asctime)s] : [%(levelname)s] : [%(message)s]',
                     level=logging.INFO)
@@ -296,14 +294,10 @@ dataset = '/home/dan/Desktop/DeepMind-Teaching-Machines-to-Read-and-Comprehend/d
 dataset_name = 'cnn'
 batch_size = 8
 n_entities = 550
+train = True
 epoch_count = 1
-n_recursions = np.arange(47537*10)
+n_recursions = np.arange(47537 * 10)
 vocab_file = '/home/dan/Desktop/DeepMind-Teaching-Machines-to-Read-and-Comprehend/deepmind-qa/cnn/stats/training/vocab.txt'
-# Where Mini_test is approximately 1100 files
-data_path = os.path.join(dataset,
-                         dataset_name,
-                         "questions",
-                         "training")
 
 
 # Add Iterators and Models
@@ -314,39 +308,76 @@ if 'CNNQA_architecture.json' in os.listdir(os.getcwd()):
     model.load_weights('CNNQA_weights.h5')
 else:
     model = Attentive_Reader_LSTM().create_graph()
-# Iterators
-QA_dataset = QADataset(data_path=data_path,
-                       vocab_file=vocab_file,
-                       n_entities=n_entities,
-                       need_sep_token=False)
-QAIterator_ = QAIterator(path=data_path,
-                         QA_dataset=QA_dataset,
-                         batch_n=batch_size)
-n_files = len(QAIterator_.files)
+    # Compile Model
+    model.compile(optimizer=RMSprop(lr=8e-5),
+                  loss={'output': 'categorical_crossentropy'})
 
 
-# Compile Model
-model.compile(optimizer=RMSprop(lr=8e-5),
-              loss={'output': 'categorical_crossentropy'})
+# Training
+if train:
+    # Where Mini_test is approximately 1100 files
+    data_path = os.path.join(dataset,
+                             dataset_name,
+                             "questions",
+                             "training")
+    # Iterators
+    QA_dataset = QADataset(data_path=data_path,
+                           vocab_file=vocab_file,
+                           n_entities=n_entities,
+                           need_sep_token=False)
+    QAIterator_ = QAIterator(path=data_path,
+                             QA_dataset=QA_dataset,
+                             batch_n=batch_size)
+    n_files = len(QAIterator_.files)
+    count = 0
+    for recursion in n_recursions:
+        logging.info('Processing Batch: {}'.format(int(recursion)))
 
-count = 0
-for recursion in n_recursions:
-    logging.info('Processing Batch: {}'.format(int(recursion)))
+        # Print Progress & Save
+        if recursion % (n_files / batch_size) == 0 and recursion > 0:
+            logging.info('Epochs Complete: {}'.format(epoch_count))
+            # model reconstruction from JSON:
+            json_string = model.to_json()
+            open('CNNQA_architecture.json',
+                 'w').write(json_string)
+            model.save_weights('CNNQA_weights.h5',
+                               overwrite=True)
+            epoch_count += 1
 
-    # Print Progress & Save
-    if recursion % (n_files / batch_size) == 0 and recursion > 0:
-        logging.info('Epochs Complete: {}'.format(epoch_count))
-        # model reconstruction from JSON:
-        json_string = model.to_json()
-        open('CNNQA_architecture.json',
-             'w').write(json_string)
-        model.save_weights('CNNQA_weights.h5')
-        epoch_count += 1
+        # Get a Batch of Data
+        (batch_ctx, batch_q, batch_a) = QAIterator_.get_request_iterator()
+        # count += batch_ctx.shape[0]
+        model.train_on_batch(data={'input_context': batch_ctx,
+                                   'input_query': batch_q,
+                                   'output': batch_a},
+                             accuracy=True)
+else:
+    # Testing
+    data_path = os.path.join(dataset,
+                             dataset_name,
+                             "questions",
+                             "validation")
+    # Iterators
+    QA_dataset = QADataset(data_path=data_path,
+                           vocab_file=vocab_file,
+                           n_entities=n_entities,
+                           need_sep_token=False)
+    QAIterator_ = QAIterator(path=data_path,
+                             QA_dataset=QA_dataset,
+                             batch_n=batch_size)
+    n_files = len(QAIterator_.files)
+    count = 0
+    for recursion in np.arange(399):
+        print(recursion, count)
+        (batch_ctx, batch_q, batch_a) = QAIterator_.get_request_iterator()
+        output = model.predict_on_batch(data={'input_context': batch_ctx,
+                                              'input_query': batch_q})
+        # Get the Argument Maxes
+        output = np.argmax(output['output'],
+                           axis=1)
+        batch_a = np.argmax(batch_a,
+                            axis=1)
+        count += np.sum(batch_a == output)
 
-    # Get a Batch of Data
-    (batch_ctx, batch_q, batch_a) = QAIterator_.get_request_iterator()
-    # count += batch_ctx.shape[0]
-    model.train_on_batch(data={'input_context': batch_ctx,
-                               'input_query': batch_q,
-                               'output': batch_a},
-                         accuracy=True)
+    print("Number of Correct Results: {} Percent".format(
+        (count / (399 * 8.0)) * 100))
