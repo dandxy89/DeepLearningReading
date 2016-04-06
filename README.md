@@ -1,6 +1,10 @@
 ## Deep Learning and Machine Learning Experimentation
 
-Overview of Projects Attempted:
+**Current Project (Wed Apr 6 2016):**
+
+Currently working on replicating the Deep Attentive Reader in Keras. This model has been designed in the same way as described in the paper [*Teaching Machines to Read and Comprehend*](http://arxiv.org/abs/1506.03340). So far, the results are consistantly improving - once 10% Accuracy has been achieved I intend to move over to an AWS instance to reduce the training time.
+
+**Overview of Projects Attempted:**
 
 * *EmbeddingKeras* - A successful attempt to incorporate Word Vectors into a Deep Learning Sentiment Classifier
 * *Spark_Course_EDx* - Outputs from the weekl coursework
